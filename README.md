@@ -1,36 +1,130 @@
 # Iris ML API
 
-A small learning project that demonstrates how a Machine Learning model can eventually be exposed through a FastAPI service.
+A Machine Learning REST API built using **Python, Scikit-learn, FastAPI, Pydantic, and Pytest**.
 
-This repository covers **Tasks 1–4** of the learning plan:
+This project demonstrates the complete workflow of training a Machine Learning model and serving predictions through a validated and tested REST API.
 
-- Task 1 — Understand the project and plan the architecture
-- Task 2 — Set up the development environment and project structure
-- Task 3 — Train and save the first ML model
-- Task 4 — Build the first bare-bones FastAPI application
+---
 
-> **Important:** Task 4 intentionally keeps `/predict` hardcoded. The saved ML model is connected to the API in Task 5, so this repository should not replace the hardcoded response yet.
+## Overview
 
-## 1. Problem Statement
+The API predicts the species of an Iris flower using four measurements:
 
-The project classifies an Iris flower into one of three species based on four measurements:
+* Sepal Length
+* Sepal Width
+* Petal Length
+* Petal Width
 
-- Sepal length
-- Sepal width
-- Petal length
-- Petal width
+### Classes
 
-Possible classes:
+* Setosa
+* Versicolor
+* Virginica
 
-- Setosa
-- Versicolor
-- Virginica
+The project uses the **Iris dataset** and a **RandomForestClassifier**.
 
-The Iris dataset is the built-in dataset provided by scikit-learn. It contains 150 samples and four input features.
+---
 
-## 2. API Contract
+## Tech Stack
 
-The planned API exposes a `POST /predict` endpoint that will eventually accept four numerical measurements:
+| Technology     | Purpose                      |
+| -------------- | ---------------------------- |
+| Python         | Application & ML development |
+| Scikit-learn   | Model training               |
+| FastAPI        | REST API                     |
+| Pydantic       | Data validation              |
+| Joblib         | Model persistence            |
+| Pytest         | API testing                  |
+| Python Logging | Application logging          |
+| Git & GitHub   | Version control              |
+
+---
+
+## Architecture
+
+```text
+Client
+   ↓
+FastAPI
+   ↓
+Pydantic Validation
+   ↓
+Loaded ML Model
+   ↓
+Prediction + Confidence
+   ↓
+JSON Response
+```
+
+The trained model is loaded once during application startup.
+
+---
+
+## Project Structure
+
+```text
+iris-ml_api/
+│
+├── app/
+│   ├── main.py
+│   └── models/
+│       └── schemas.py
+│
+├── ml/
+│   ├── train.py
+│   ├── predict_saved_model.py
+│   └── saved_model/
+│       └── model.joblib
+│
+├── tests/
+│   └── test_api.py
+│
+├── requirements.txt
+├── .gitignore
+└── README.md
+```
+
+---
+
+# Development Tasks
+
+### Task 1 — Problem & Architecture
+
+Defined the Iris classification problem, API requirements, inputs, outputs, and overall ML API architecture.
+
+### Task 2 — Environment & Project Structure
+
+Created a Python virtual environment, configured dependencies, and organized the project into application, ML, and testing modules.
+
+### Task 3 — Model Training & Persistence
+
+Trained a `RandomForestClassifier` using the Iris dataset and saved the trained model using Joblib.
+
+```text
+Iris Dataset
+     ↓
+Train/Test Split
+     ↓
+Random Forest
+     ↓
+Evaluation
+     ↓
+model.joblib
+```
+
+### Task 4 — Initial FastAPI Application
+
+Created the initial FastAPI application with basic endpoints and interactive Swagger documentation.
+
+### Task 5 — Model Loading
+
+Integrated the saved Machine Learning model into FastAPI and configured it to load during application startup.
+
+### Task 6 — Input Validation
+
+Implemented Pydantic validation for the four Iris measurements.
+
+Example request:
 
 ```json
 {
@@ -41,115 +135,30 @@ The planned API exposes a `POST /predict` endpoint that will eventually accept f
 }
 ```
 
-The completed API will validate the input, send the measurements to the saved ML model, and return the predicted species as JSON.
+### Task 7 — Core Prediction API
 
-Example planned response:
+Implemented the complete `/predict` workflow with:
 
-```json
-{
-  "prediction": "setosa"
-}
-```
+* Model prediction
+* Confidence score
+* Request ID
+* `/health` endpoint
 
-## 3. Architecture Flow
+### Task 8 — Response Models & Error Handling
 
-```text
-Client
-  |
-  v
-POST /predict
-  |
-  v
-Input validation
-  |
-  v
-Saved ML model
-  |
-  v
-Prediction
-  |
-  v
-JSON response
-```
+Added Pydantic response models, HTTP status handling, exception handling, and automated API tests using Pytest.
 
-For Task 4, only the FastAPI server layer is implemented; the model and validation layers are intentionally deferred.
+### Task 9 — Logging & Observability
 
-## 4. Project Structure
+Added structured application logging to monitor startup, prediction requests, request IDs, prediction results, and errors.
 
-```text
-iris-ml-api/
-├── app/
-│   ├── main.py
-│   ├── models/
-│   │   └── .gitkeep
-│   └── routers/
-│       └── .gitkeep
-├── ml/
-│   ├── train.py
-│   ├── predict_saved_model.py
-│   └── saved_model/
-│       └── model.joblib
-├── tests/
-│   └── .gitkeep
-├── requirements.txt
-├── .gitignore
-└── README.md
-```
+---
 
-## 5. Task 3 — Train and Save the Model
+# API Endpoints
 
-`ml/train.py`:
+### `GET /`
 
-1. Loads the Iris dataset.
-2. Splits the data into 80% training and 20% test data.
-3. Uses `stratify=y` and `random_state=42` for a repeatable split.
-4. Trains a `RandomForestClassifier`.
-5. Prints test accuracy.
-6. Saves the trained model as `ml/saved_model/model.joblib` using `joblib`.
-
-Run:
-
-```bash
-python ml/train.py
-```
-
-Expected output is similar to:
-
-```text
-Test accuracy: 90% or higher
-Saved model to: .../ml/saved_model/model.joblib
-```
-
-The exact accuracy can vary if the training implementation is changed, but the current fixed implementation is repeatable.
-
-## 6. Prove Model Reloading Works
-
-The separate script loads the saved `.joblib` file without retraining and performs a prediction.
-
-Run:
-
-```bash
-python ml/predict_saved_model.py
-```
-
-## 7. Task 4 — Bare-Bones FastAPI
-
-Start the server:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Open:
-
-- `http://127.0.0.1:8000/`
-- `http://127.0.0.1:8000/docs`
-
-The Task 4 endpoints are:
-
-### GET `/`
-
-Returns:
+Returns API status.
 
 ```json
 {
@@ -157,61 +166,129 @@ Returns:
 }
 ```
 
-### POST `/predict`
+### `GET /health`
 
-Returns the temporary Task 4 response:
+Checks API and model status.
 
 ```json
 {
-  "prediction": "hardcoded_result"
+  "status": "ok",
+  "model_loaded": true
 }
 ```
 
-This hardcoded response is intentional because Task 4 is only proving that the FastAPI server and routes work. Task 5 will replace it with the saved model.
+### `POST /predict`
 
-## 8. Setup
+Returns the predicted Iris species.
 
-Create and activate a virtual environment:
+Example response:
+
+```json
+{
+  "prediction": "setosa",
+  "confidence": 1.0,
+  "request_id": "unique-request-id"
+}
+```
+
+---
+
+# Installation
+
+```bash
+git clone https://github.com/Alagusundaram93/iris-ml_api.git
+cd iris-ml_api
+
+python -m venv venv
+```
 
 ### Windows
 
 ```powershell
-python -m venv venv
 venv\Scripts\activate
-```
-
-### Linux/macOS
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
 ```
 
 Install dependencies:
 
 ```bash
-python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## 9. Task 1–4 Completion Checklist
+---
 
-- [x] Iris dataset and classification problem selected
-- [x] API contract documented
-- [x] Request → validation → model → response architecture documented
-- [x] GitHub-ready project structure created
-- [x] `.gitignore` excludes virtual environments and Python cache files
-- [x] `requirements.txt` included
-- [x] ML training script included
-- [x] Train/test split implemented
-- [x] Model metric printed
-- [x] Model saved with `joblib`
-- [x] Separate saved-model reload script included
-- [x] FastAPI application created
-- [x] `GET /` implemented
-- [x] `POST /predict` implemented as the Task 4 hardcoded endpoint
-- [x] FastAPI automatic `/docs` available
+# Run the Application
 
-## Next Task
+Train the model:
 
-Task 5 should load `ml/saved_model/model.joblib` inside FastAPI, add Pydantic request validation, and replace the hardcoded `/predict` response with a real Iris prediction.
+```bash
+python ml/train.py
+```
+
+Start the API:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Swagger documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+---
+
+# Run Tests
+
+```bash
+pytest -v
+```
+
+The test suite covers health checks, predictions, model loading, response validation, and model failure handling.
+
+---
+
+# Development Status
+
+| Task                              | Status      |
+| --------------------------------- | ----------- |
+| Task 1 — Architecture             | ✅ Completed |
+| Task 2 — Environment              | ✅ Completed |
+| Task 3 — Model Training           | ✅ Completed |
+| Task 4 — FastAPI Setup            | ✅ Completed |
+| Task 5 — Model Loading            | ✅ Completed |
+| Task 6 — Pydantic Validation      | ✅ Completed |
+| Task 7 — Prediction API           | ✅ Completed |
+| Task 8 — Error Handling & Testing | ✅ Completed |
+| Task 9 — Logging & Observability  | ✅ Completed |
+
+---
+
+# Key Learning Outcomes
+
+* Machine Learning model training
+* Model persistence with Joblib
+* FastAPI REST API development
+* Pydantic validation
+* API error handling
+* Automated testing with Pytest
+* Structured logging
+* Request tracing
+* Git & GitHub workflow
+
+---
+
+# Future Improvements
+
+* Docker deployment
+* CI/CD with GitHub Actions
+* API authentication
+* Model versioning
+* Cloud deployment
+* Production monitoring
+
+---
+
+## Author
+
+**Alagu Sundaram M**

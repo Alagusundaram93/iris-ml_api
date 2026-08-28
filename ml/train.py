@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import joblib
 from sklearn.datasets import load_iris
 from sklearn.ensemble import RandomForestClassifier
@@ -7,7 +6,6 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
 MODEL_PATH = Path(__file__).resolve().parent / "saved_model" / "model.joblib"
-
 
 def train():
     """Train a Random Forest classifier on the Iris dataset and save it."""
@@ -37,7 +35,6 @@ def train():
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_PATH)
     print(f"Saved model to: {MODEL_PATH}")
-
 
 if __name__ == "__main__":
     train()
