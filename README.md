@@ -67,20 +67,35 @@ iris-ml_api/
 │
 ├── app/
 │   ├── main.py
-│   └── models/
-│       └── schemas.py
+│   ├── config.py
+│   ├── logging_config.py
+│   │
+│   ├── models/
+│   │   └── schemas.py
+│   │
+│   └── routers/
+│       ├── v1.py
+│       └── v2.py
 │
 ├── ml/
 │   ├── train.py
 │   ├── predict_saved_model.py
 │   └── saved_model/
-│       └── model.joblib
+│       ├── model.joblib
+│       └── metadata.json
 │
 ├── tests/
-│   └── test_api.py
+│   ├── conftest.py
+│   ├── test_api.py
+│   ├── test_health.py
+│   ├── test_predict.py
+│   ├── test_batch.py
+│   ├── test_model_info.py
+│   └── test_v2.py
 │
-├── requirements.txt
+├── .env
 ├── .gitignore
+├── requirements.txt
 └── README.md
 ```
 
@@ -154,6 +169,198 @@ Added structured application logging to monitor startup, prediction requests, re
 
 ---
 
+### Task 10 — API Versioning
+
+Introduced API versioning using FastAPI `APIRouter` to create a scalable and maintainable API structure.
+
+The existing prediction and supporting endpoints were moved under the `/api/v1` prefix without changing their core behavior.
+
+Implemented version 1 endpoints:
+
+* `/api/v1/health`
+* `/api/v1/predict`
+* `/api/v1/predict-batch`
+* `/api/v1/model-info`
+
+The versioned router is registered with the main FastAPI application using `include_router()`.
+
+This provides a foundation for introducing future API versions without breaking existing clients.
+
+---
+
+### Task 11 — Batch Prediction & Model Information
+
+Extended the API to support multiple Iris predictions in a single request.
+
+Implemented:
+
+* `/api/v1/predict-batch`
+* `/api/v1/model-info`
+* Configurable maximum batch size
+* Batch prediction using a single model inference call
+* Confidence calculation for each prediction
+* Batch processing duration logging
+* Model metadata retrieval
+
+Example batch flow:
+
+```text
+Multiple Iris Inputs
+        ↓
+Pydantic Validation
+        ↓
+Batch Size Validation
+        ↓
+Input Matrix
+        ↓
+ML Model
+        ↓
+Multiple Predictions
+        ↓
+Confidence Scores
+        ↓
+JSON Response
+```
+
+Batch prediction improves efficiency by sending multiple inputs to the model in a single inference operation.
+
+The `/api/v1/model-info` endpoint provides metadata associated with the trained model.
+
+---
+
+### Task 12 — Configuration Management
+
+Introduced centralized configuration management using **Pydantic Settings** and environment variables.
+
+Application configuration includes:
+
+* `MODEL_PATH`
+* `METADATA_PATH`
+* `LOG_LEVEL`
+* `MAX_BATCH_SIZE`
+* `API_TITLE`
+* `API_VERSION`
+
+Configuration values are loaded from the `.env` file instead of being hard-coded throughout the application.
+
+This makes the application easier to configure for different environments such as development, testing, and production.
+
+Example:
+
+```text
+.env
+   ↓
+Pydantic Settings
+   ↓
+Settings Object
+   ↓
+FastAPI Application
+   ↓
+Routers / Services
+```
+
+The `.env` file is excluded from Git tracking using `.gitignore`.
+
+---
+
+### Task 13 — Automated API Testing
+
+Implemented a structured automated testing layer using **Pytest** and FastAPI's `TestClient`.
+
+The test suite verifies:
+
+* Health check behavior
+* Model loading status
+* Prediction responses
+* Input validation
+* Batch prediction
+* Model information
+* Error handling
+* Response structures
+* Logging-related behavior
+* Model failure scenarios
+
+A reusable Pytest fixture was created for the FastAPI `TestClient`.
+
+Example testing flow:
+
+```text
+Pytest
+   ↓
+TestClient
+   ↓
+FastAPI Endpoint
+   ↓
+Application Logic
+   ↓
+Response
+   ↓
+Assertions
+   ↓
+PASS / FAIL
+```
+
+Automated tests provide regression protection and help ensure that existing API behavior continues to work when new features are introduced.
+
+The complete test suite was verified successfully with:
+
+```bash
+pytest -v
+```
+
+---
+
+### Task 14 — API V2 & Breaking Response Change
+
+Introduced a new **API Version 2** with a different response structure while keeping the existing V1 API unchanged.
+
+The V1 prediction response returns:
+
+```json
+{
+  "prediction": "setosa",
+  "confidence": 1.0,
+  "request_id": "unique-request-id"
+}
+```
+
+The V2 prediction response returns the complete probability distribution:
+
+```json
+{
+  "prediction": "setosa",
+  "probabilities": {
+    "setosa": 1.0,
+    "versicolor": 0.0,
+    "virginica": 0.0
+  },
+  "request_id": "unique-request-id"
+}
+```
+
+Implemented:
+
+* `/api/v2/predict`
+* `PredictionV2Output` response schema
+* Full class probability response
+* V2-specific error handling
+* Automated V2 API tests
+* V1 vs V2 response-shape verification
+
+### V1 vs V2
+
+| Feature            | V1                | V2                |
+| ------------------ | ----------------- | ----------------- |
+| Prediction         | ✅                 | ✅                 |
+| Confidence         | ✅                 | ❌                 |
+| Full Probabilities | ❌                 | ✅                 |
+| Request ID         | ✅                 | ✅                 |
+| API Path           | `/api/v1/predict` | `/api/v2/predict` |
+
+The V1 API was intentionally preserved to maintain backward compatibility for existing clients.
+
+---
+
 # API Endpoints
 
 ### `GET /`
@@ -166,7 +373,7 @@ Returns API status.
 }
 ```
 
-### `GET /health`
+### `GET /api/v1/health`
 
 Checks API and model status.
 
@@ -177,9 +384,9 @@ Checks API and model status.
 }
 ```
 
-### `POST /predict`
+### `POST /api/v1/predict`
 
-Returns the predicted Iris species.
+Returns the predicted Iris species and confidence score.
 
 Example response:
 
@@ -187,6 +394,46 @@ Example response:
 {
   "prediction": "setosa",
   "confidence": 1.0,
+  "request_id": "unique-request-id"
+}
+```
+
+### `POST /api/v1/predict-batch`
+
+Accepts multiple Iris inputs and returns predictions for all inputs.
+
+Example structure:
+
+```json
+{
+  "predictions": [
+    {
+      "prediction": "setosa",
+      "confidence": 1.0,
+      "request_id": "unique-request-id"
+    }
+  ]
+}
+```
+
+### `GET /api/v1/model-info`
+
+Returns metadata related to the trained Machine Learning model.
+
+### `POST /api/v2/predict`
+
+Returns the predicted Iris species along with the probability of each class.
+
+Example response:
+
+```json
+{
+  "prediction": "setosa",
+  "probabilities": {
+    "setosa": 1.0,
+    "versicolor": 0.0,
+    "virginica": 0.0
+  },
   "request_id": "unique-request-id"
 }
 ```
@@ -216,6 +463,21 @@ pip install -r requirements.txt
 
 ---
 
+# Configuration
+
+Create a `.env` file in the project root:
+
+```text
+MODEL_PATH=ml/saved_model/model.joblib
+METADATA_PATH=ml/saved_model/metadata.json
+LOG_LEVEL=INFO
+MAX_BATCH_SIZE=100
+API_TITLE=MY_IRIS_PREDICTOR
+API_VERSION=1.0.0
+```
+
+---
+
 # Run the Application
 
 Train the model:
@@ -236,6 +498,16 @@ Swagger documentation:
 http://127.0.0.1:8000/docs
 ```
 
+The versioned endpoints can be tested through Swagger:
+
+```text
+/api/v1/health
+/api/v1/predict
+/api/v1/predict-batch
+/api/v1/model-info
+/api/v2/predict
+```
+
 ---
 
 # Run Tests
@@ -244,23 +516,23 @@ http://127.0.0.1:8000/docs
 pytest -v
 ```
 
-The test suite covers health checks, predictions, model loading, response validation, and model failure handling.
+The test suite covers:
 
----
+* Health checks
+* Model loading
+* Predictions
+* Input validation
+* Batch prediction
+* Model information
+* Error handling
+* V2 response validation
+* V1 and V2 response compatibility
 
-# Development Status
+### Final Test Result
 
-| Task                              | Status      |
-| --------------------------------- | ----------- |
-| Task 1 — Architecture             | ✅ Completed |
-| Task 2 — Environment              | ✅ Completed |
-| Task 3 — Model Training           | ✅ Completed |
-| Task 4 — FastAPI Setup            | ✅ Completed |
-| Task 5 — Model Loading            | ✅ Completed |
-| Task 6 — Pydantic Validation      | ✅ Completed |
-| Task 7 — Prediction API           | ✅ Completed |
-| Task 8 — Error Handling & Testing | ✅ Completed |
-| Task 9 — Logging & Observability  | ✅ Completed |
+```text
+19 passed
+```
 
 ---
 
@@ -274,6 +546,16 @@ The test suite covers health checks, predictions, model loading, response valida
 * Automated testing with Pytest
 * Structured logging
 * Request tracing
+* API versioning
+* FastAPI APIRouter
+* Batch prediction
+* Model metadata management
+* Configuration management with Pydantic Settings
+* Environment variables
+* API response models
+* Backward compatibility
+* Breaking API changes
+* V1 and V2 API design
 * Git & GitHub workflow
 
 ---
@@ -283,12 +565,19 @@ The test suite covers health checks, predictions, model loading, response valida
 * Docker deployment
 * CI/CD with GitHub Actions
 * API authentication
-* Model versioning
+* Advanced model versioning
 * Cloud deployment
 * Production monitoring
+* API rate limiting
+* Database integration
+* Advanced observability
 
 ---
 
 ## Author
 
 **Alagu Sundaram M**
+
+### GitHub Repository
+
+https://github.com/Alagusundaram93/iris-ml_api

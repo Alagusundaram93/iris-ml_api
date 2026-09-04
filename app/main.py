@@ -1,69 +1,63 @@
 from contextlib import asynccontextmanager
-import logging
+import json
 import time
-from uuid import uuid4
-
 import joblib
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-
-from app.models.schemas import PredictionInput, PredictionOutput
+from app.config import settings
 from app.logging_config import setup_logger
+from app.routers.v1 import router as v1_router
+from app.routers.v2 import router as v2_router
 
-
-trained_model = None
 logger = setup_logger()
-
 class PredictionShapeError(Exception):
     pass
 
-
 @asynccontextmanager
 async def lifecycle(app: FastAPI):
-    global trained_model
-
     try:
-        trained_model = joblib.load("ml/saved_model/model.joblib")
-
-        logger.info("ML model loaded successfully")
+        app.state.trained_model = joblib.load(settings.MODEL_PATH)
+        with open(settings.METADATA_PATH,"r",encoding="utf-8") as file:
+            app.state.model_metadata = json.load(file)
+        logger.info(
+            "ML model and metadata loaded successfully"
+        )
 
     except Exception as exc:
         logger.error(f"ML model loading failed error={exc}")
         raise
-
     yield
 
-
 app = FastAPI(
-    title="MY_IRIS_PREDICTOR",
+    title=settings.API_TITLE,
     description="A simple API to predict and health check.",
-    version="1.0.0",
+    version=settings.API_VERSION,
     lifespan=lifecycle
 )
 
+app.include_router(v1_router)
+app.include_router(v2_router)
 
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_requests(
+    request: Request,
+    call_next
+):
+    from uuid import uuid4
     request_id = str(uuid4())
-
     request.state.request_id = request_id
-
     start_time = time.perf_counter()
-
     logger.info(
         f"request_id={request_id} "
         f"method={request.method} "
         f"path={request.url.path} "
         f"request_started"
     )
-
     try:
         response = await call_next(request)
         return response
-
     finally:
         duration = time.perf_counter() - start_time
-
         logger.info(
             f"request_id={request_id} "
             f"method={request.method} "
@@ -71,14 +65,12 @@ async def log_requests(request: Request, call_next):
             f"duration={duration:.4f}s"
         )
 
-
 @app.exception_handler(PredictionShapeError)
 async def prediction_shape_exception_handler(
     request: Request,
     exc: PredictionShapeError
 ):
     request_id = request.state.request_id
-
     logger.error(
         f"request_id={request_id} "
         f"prediction_shape_error"
@@ -90,75 +82,3 @@ async def prediction_shape_exception_handler(
             "detail": "Prediction input shape is invalid"
         }
     )
-
-
-@app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "model_loaded": trained_model is not None
-    }
-
-
-@app.post("/predict", response_model=PredictionOutput)
-def predict(
-    input_data: PredictionInput,
-    request: Request
-):
-    request_id = request.state.request_id
-
-    input_list = [[
-        input_data.sepal_length,
-        input_data.sepal_width,
-        input_data.petal_length,
-        input_data.petal_width
-    ]]
-
-    try:
-        prediction = trained_model.predict(input_list)[0]
-
-        if hasattr(trained_model, "predict_proba"):
-            probabilities = trained_model.predict_proba(input_list)[0]
-            confidence = float(max(probabilities))
-        else:
-            confidence = 0.0
-
-        flower_names = {
-            0: "setosa",
-            1: "versicolor",
-            2: "virginica"
-        }
-
-        try:
-            prediction = flower_names[int(prediction)]
-
-        except (KeyError, ValueError, TypeError):
-            raise PredictionShapeError()
-
-    except PredictionShapeError:
-        raise
-
-    except Exception as exc:
-        logger.error(
-            f"request_id={request_id} "
-            f"prediction_failed "
-            f"error={exc}"
-        )
-
-        raise HTTPException(
-            status_code=500,
-            detail="Prediction failed"
-        )
-
-    logger.info(
-        f"request_id={request_id} "
-        f"prediction={prediction} "
-        f"confidence={confidence:.4f} "
-        f"prediction_success"
-    )
-
-    return {
-        "prediction": str(prediction),
-        "confidence": confidence,
-        "request_id": request_id
-    }

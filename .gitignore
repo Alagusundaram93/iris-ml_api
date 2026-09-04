@@ -7,11 +7,12 @@ env/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Logs
 logs/
 
 # Environment and local configuration
 .env
-.env.*
 
 # IDE/editor files
 .vscode/
